@@ -202,7 +202,7 @@ esperar "Cliente intenta ver todas las ventas" 403
 # =============================================================================
 seccion "4. Propiedad de los recursos (IDOR)"
 # =============================================================================
-peticion POST "/api/mascotas/propietario/$CLIENTE_A_ID" "$TOKEN_A" '{"nombre":"Firulais","especie":"Perro","raza":"Mestizo","sexo":"Macho"}'
+peticion POST "/api/mascotas/propietario/$CLIENTE_A_ID" "$TOKEN_A" '{"nombre":"Firulais","especie":"Perro","raza":"Mestizo","fechaNacimiento":"2022-03-10","sexo":"Macho"}'
 esperar "Cliente A registra su propia mascota" 200
 MASCOTA_A_ID=$(campo_num id)
 no_contiene "La mascota no expone la contraseña del dueño" '"password"'
