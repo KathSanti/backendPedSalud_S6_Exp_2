@@ -19,7 +19,6 @@ public final class ValidadorMascota {
         if (estaVacio(mascota.getNombre())) faltantes.add("nombre");
         if (estaVacio(mascota.getEspecie())) faltantes.add("especie");
         if (estaVacio(mascota.getRaza())) faltantes.add("raza");
-        if (mascota.getPropietario() == null) faltantes.add("propietario");
         if (mascota.getFechaNacimiento() == null) faltantes.add("fechaNacimiento");
         if (estaVacio(mascota.getSexo())) faltantes.add("sexo");
         return faltantes;
