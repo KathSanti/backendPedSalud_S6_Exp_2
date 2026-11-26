@@ -25,7 +25,7 @@ public class MascotaTest {
     }
 
     @Test
-    @DisplayName("Caso límite: si mañana cumple 1 año, hoy todavía tiene 0")
+    @DisplayName("Caso límite si mañana cumple 1 año, hoy todavía tiene 0")
     void getEdad_unDiaAntesDelCumpleanos_noRedondeaHaciaArriba() {
         // Arrange
         Mascota cachorro = Mascota.builder()
