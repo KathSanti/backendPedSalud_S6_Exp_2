@@ -8,9 +8,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity
 @Table(name = "mascotas")
@@ -33,6 +35,7 @@ public class Mascota {
     @NotBlank 
     private String raza;
 
+    @NotBlank (message = "La Fecha de nacimiento de la mascota es obligatoria")
     private LocalDate fechaNacimiento;
 
     private String sexo;
@@ -49,4 +52,13 @@ public class Mascota {
     @JsonIgnore
     @OneToMany(mappedBy = "mascota", cascade = CascadeType.ALL)
     private List<ExpedienteMedico> expedientesMedicos;
+
+    // Calculo de la edad 
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public Integer getEdad() {
+        if (fechaNacimiento == null) {
+            return null;
+        }
+        return Period.between(fechaNacimiento, LocalDate.now()).getYears();
+    }
 }
