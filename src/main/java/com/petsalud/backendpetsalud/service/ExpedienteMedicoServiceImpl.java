@@ -2,6 +2,7 @@ package com.petsalud.backendpetsalud.service;
 
 import com.petsalud.backendpetsalud.entity.ExpedienteMedico;
 import com.petsalud.backendpetsalud.entity.Mascota;
+import com.petsalud.backendpetsalud.entity.Rol;
 import com.petsalud.backendpetsalud.entity.Usuario;
 import com.petsalud.backendpetsalud.repository.ExpedienteMedicoRepository;
 import com.petsalud.backendpetsalud.repository.MascotaRepository;
@@ -26,12 +27,22 @@ public class ExpedienteMedicoServiceImpl implements ExpedienteMedicoService {
 
     @Override
     public ExpedienteMedico agregarRegistro(Long mascotaId, Long veterinarioId, ExpedienteMedico registro) {
+
+        //traer descripción, diagnostico y tratamiento
+        ValidadorExpediente.validarDatos(registro);
+
+        // Validar que la mascota existe
         Mascota mascota = mascotaRepository.findById(mascotaId)
                 .orElseThrow(() -> new IllegalArgumentException("Mascota no encontrada"));
 
+        // Validar que el veterinario existe y tiene rol de VETERINARIO
         Usuario veterinario = usuarioRepository.findById(veterinarioId)
                 .orElseThrow(() -> new IllegalArgumentException("Veterinario no encontrado"));
+            ValidadorUsuario.validarRol(veterinario, Rol.VETERINARIO, "veterinario");
+            ValidadorUsuario.validarDatosBasicos(veterinario, "veterinario");  
 
+        //id ignorado en json 
+        registro.setId(null);    
         registro.setMascota(mascota);
         registro.setVeterinario(veterinario);
         registro.setFecha(LocalDateTime.now());
