@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -204,6 +205,92 @@ class VentaServiceImplTest {
         assertEquals(List.of(venta), ventaService.listarTodasLasVentas());
     }
 
+        // Casos límite agregados en la semana 6 
+
+    @Test
+    @DisplayName("Registro de transacciones: solo un CLIENTE puede ser el comprador")
+    void realizarVenta_compradorNoCliente_seRechaza() {
+        // Arrange
+        Usuario empleado = usuarioCompleto();
+        empleado.setRol(Rol.VETERINARIO );
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(empleado));
+
+        // Act
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> ventaService.realizarVenta(1L, List.of(1L)));
+
+        // Assert
+        assertEquals("El usuario indicado como cliente debe tener el rol CLIENTE", error.getMessage());
+        verify(productoRepository, never()).findAllById(any());
+        verify(ventaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Si un producto no tiene stock, tampoco se descuenta el stock de los demás")
+    void realizarVenta_unProductoSinStock_noTocaElStockDeLosOtros() {
+        // Arrange
+        Producto agotado = producto(3L, "Shampoo antipulgas", "6990", 0);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioCompleto()));
+        when(productoRepository.findAllById(List.of(1L, 3L))).thenReturn(List.of(alimento, agotado));
+
+        // Act
+        assertThrows(IllegalArgumentException.class,
+                () -> ventaService.realizarVenta(1L, List.of(1L, 3L)));
+
+        // Assert
+        assertEquals(5, alimento.getStock());   // antes del ajuste quedaba en 4
+        verify(productoRepository, never()).save(any());
+        verify(ventaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("El mismo producto dos veces: descuenta 2 unidades y se cobra 2 veces")
+    void realizarVenta_productoRepetido_descuentaDosUnidades() {
+        // Arrange
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioCompleto()));
+        when(productoRepository.findAllById(List.of(1L))).thenReturn(List.of(alimento));
+        when(ventaRepository.save(any(Venta.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        // Act
+        Venta venta = ventaService.realizarVenta(1L, List.of(1L, 1L));
+
+        // Assert
+        assertEquals(3, alimento.getStock());                      // 5 - 2
+        assertEquals(new BigDecimal("25980"), venta.getTotal());   // 12.990 x 2
+        assertEquals(List.of(alimento, alimento), venta.getProductos());
+    }
+
+    @Test
+    @DisplayName("Caso límite: pedir más unidades que el stock disponible se rechaza")
+    void realizarVenta_masUnidadesQueStock_seRechaza() {
+        // Arrange
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuarioCompleto()));
+        when(productoRepository.findAllById(List.of(2L))).thenReturn(List.of(antiparasitario)); // stock 2
+
+        // Act
+        assertThrows(IllegalArgumentException.class,
+                () -> ventaService.realizarVenta(1L, List.of(2L, 2L, 2L)));
+
+        // Assert
+        assertEquals(2, antiparasitario.getStock());
+        verify(ventaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Una venta sin productos se rechaza antes de consultar la BD")
+    void realizarVenta_sinProductos_seRechaza() {
+        // Arrange
+        List<Long> sinProductos = List.of();
+
+        // Act
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> ventaService.realizarVenta(1L, sinProductos));
+
+        // Assert
+        assertEquals("La venta debe incluir al menos un producto", error.getMessage());
+        verifyNoInteractions(usuarioRepository, productoRepository, ventaRepository);
+    }
+
     // Datos de prueba 
 
     private void prepararVentaExitosa(Usuario usuario) {
@@ -228,4 +315,6 @@ class VentaServiceImplTest {
                 .id(id).nombre(nombre).precio(new BigDecimal(precio)).stock(stock)
                 .build();
     }
+
+
 }
