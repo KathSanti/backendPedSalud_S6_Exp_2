@@ -52,13 +52,13 @@ public class ExpedienteMedicoController {
         return ResponseEntity.noContent().build();
     }
 
-    @PreAuthorize("hasRole('EMPLEADO')")
+    @PreAuthorize("hasRole('VETERINARIO')")
     @PostMapping
     public ResponseEntity<ExpedienteMedico> agregarRegistro(
             @AuthenticationPrincipal UsuarioDetails veterinario,
             @RequestParam Long mascotaId,
             @RequestBody ExpedienteMedico registro) {
         ExpedienteMedico nuevoRegistro = expedienteMedicoService.agregarRegistro(mascotaId, veterinario.getId(), registro);
-        return ResponseEntity.ok(nuevoRegistro);
+        return ResponseEntity.ok(nuevoRegistro); 
     }
 }
