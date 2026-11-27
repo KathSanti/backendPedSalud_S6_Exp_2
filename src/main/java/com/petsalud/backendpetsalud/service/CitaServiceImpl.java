@@ -15,6 +15,7 @@ import lombok.AllArgsConstructor;
 
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +26,8 @@ public class CitaServiceImpl implements CitaService {
 
     // Política de la clínica: las citas se agendan con hasta 30 días de anticipación.
     static final int DIAS_MAXIMOS_ANTICIPACION = 30;
+    static final int DURACION_MINUTOS = 30;
+    static final int MAX_CITAS_POR_DIA = 8;
 
     private CitaRepository citaRepository;
 
@@ -52,10 +55,7 @@ public class CitaServiceImpl implements CitaService {
         ValidadorUsuario.validarDatosBasicos(veterinario, "veterinario");
 
         // 4. El veterinario no tiene otra cita a esa hora (las canceladas no cuentan)
-        if (citaRepository.existsByVeterinarioIdAndFechaHoraAndEstadoNot(
-                veterinarioId, fechaHora, EstadoCita.CANCELADA)) {
-            throw new ConflictoException("El veterinario ya tiene una cita agendada en ese horario");
-        }
+        validarHorarioDisponible(veterinarioId, fechaHora);
 
         // la cita nace en estado AGENDADA
         Cita cita = Cita.builder()
@@ -124,4 +124,22 @@ public class CitaServiceImpl implements CitaService {
                     + DIAS_MAXIMOS_ANTICIPACION + " días de anticipación");
         }
     }
+
+    private void validarHorarioDisponible(Long veterinarioId, LocalDateTime fechaHora) {
+        LocalDateTime desde = fechaHora.minusMinutes(DURACION_MINUTOS);
+        LocalDateTime hasta = fechaHora.plusMinutes(DURACION_MINUTOS);
+        if (citaRepository.existsByVeterinarioIdAndEstadoNotAndFechaHoraAfterAndFechaHoraBefore(
+                veterinarioId, EstadoCita.CANCELADA, desde, hasta)) {
+            throw new ConflictoException("El veterinario ya tiene una cita que se cruza con ese horario");
+        }
+
+        LocalDate dia = fechaHora.toLocalDate();
+        long citasDelDia = citaRepository.countByVeterinarioIdAndEstadoNotAndFechaHoraBetween(
+                veterinarioId, EstadoCita.CANCELADA, dia.atStartOfDay(), dia.atTime(23, 59, 59));
+        if (citasDelDia >= MAX_CITAS_POR_DIA) {
+            throw new ConflictoException("El veterinario ya tiene su agenda completa ese día (máximo "
+                    + MAX_CITAS_POR_DIA + " citas)");
+        }
+}
+
 }
