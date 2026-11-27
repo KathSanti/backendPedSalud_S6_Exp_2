@@ -4,6 +4,7 @@ import com.petsalud.backendpetsalud.entity.ExpedienteMedico;
 import com.petsalud.backendpetsalud.entity.Mascota;
 import com.petsalud.backendpetsalud.entity.Rol;
 import com.petsalud.backendpetsalud.entity.Usuario;
+import com.petsalud.backendpetsalud.exception.RecursoNoEncontradoException;
 import com.petsalud.backendpetsalud.repository.ExpedienteMedicoRepository;
 import com.petsalud.backendpetsalud.repository.MascotaRepository;
 import com.petsalud.backendpetsalud.repository.UsuarioRepository;
@@ -33,11 +34,11 @@ public class ExpedienteMedicoServiceImpl implements ExpedienteMedicoService {
 
         // Validar que la mascota existe
         Mascota mascota = mascotaRepository.findById(mascotaId)
-                .orElseThrow(() -> new IllegalArgumentException("Mascota no encontrada"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Mascota no encontrada"));
 
         // Validar que el veterinario existe y tiene rol de VETERINARIO
         Usuario veterinario = usuarioRepository.findById(veterinarioId)
-                .orElseThrow(() -> new IllegalArgumentException("Veterinario no encontrado"));
+                .orElseThrow(() -> new RecursoNoEncontradoException("Veterinario no encontrado"));
             ValidadorUsuario.validarRol(veterinario, Rol.VETERINARIO, "veterinario");
             ValidadorUsuario.validarDatosBasicos(veterinario, "veterinario");  
 
