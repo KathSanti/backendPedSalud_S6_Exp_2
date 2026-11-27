@@ -1,6 +1,7 @@
 package com.petsalud.backendpetsalud.service;
 
 import com.petsalud.backendpetsalud.entity.Producto;
+import com.petsalud.backendpetsalud.entity.Rol;
 import com.petsalud.backendpetsalud.entity.Usuario;
 import com.petsalud.backendpetsalud.entity.Venta;
 import com.petsalud.backendpetsalud.repository.ProductoRepository;
@@ -30,6 +31,8 @@ public class VentaServiceImpl implements VentaService {
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
                 
         ValidadorUsuario.validarDatosCompletos(usuario);
+        //asociar un cliente en cada venta 
+        ValidadorUsuario.validarRol(usuario, Rol.CLIENTE, "cliente");
 
         List<Producto> productos = productoRepository.findAllById(productosIds);
 
