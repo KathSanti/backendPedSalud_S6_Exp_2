@@ -1,12 +1,14 @@
 package com.petsalud.backendpetsalud.controller;
 
 import com.petsalud.backendpetsalud.entity.ExpedienteMedico;
+import com.petsalud.backendpetsalud.security.UsuarioDetails;
 import com.petsalud.backendpetsalud.service.ExpedienteMedicoService;
 
 import lombok.AllArgsConstructor;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -48,5 +50,15 @@ public class ExpedienteMedicoController {
     public ResponseEntity<Void> eliminarRegistro(@PathVariable Long id) {
         expedienteMedicoService.eliminarRegistro(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PreAuthorize("hasRole('EMPLEADO')")
+    @PostMapping
+    public ResponseEntity<ExpedienteMedico> agregarRegistro(
+            @AuthenticationPrincipal UsuarioDetails veterinario,
+            @RequestParam Long mascotaId,
+            @RequestBody ExpedienteMedico registro) {
+        ExpedienteMedico nuevoRegistro = expedienteMedicoService.agregarRegistro(mascotaId, veterinario.getId(), registro);
+        return ResponseEntity.ok(nuevoRegistro);
     }
 }
