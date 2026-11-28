@@ -1,122 +1,149 @@
-# Clínica PetSalud · Backend seguro
+# Clínica PetSalud · Backend 
 
-API REST de la Clínica PetSalud (citas, expedientes médicos, mascotas, productos, ventas, recompensas y notificaciones) protegida con **Spring Security + JWT**, autorización por **roles** y por **propiedad de los recursos**, y **monitoreo de actividad sospechosa**.
+API REST para citas, expedientes médicos, mascotas y ventas. Autentica con **JWT**, autoriza por **rol** (CLIENTE, VETERINARIO, ADMIN) y por **dueño del recurso**, y valida sus reglas con **177 pruebas automatizadas**.
 
-**Tecnologías:** Java 17 · Spring Boot 3.3 · Spring Security 6 · JJWT 0.12 · Spring Data JPA · MySQL (Docker) · Lombok · JUnit 5 · Mockito · JaCoCo · H2
+**Tecnologías:** Java 17 · Spring Boot 3.3 · Spring Security · JWT · JPA · MySQL · JUnit 5 · Mockito · JaCoCo
 
 ---
 
-## Estructura del proyecto
+## Arquitectura y estructura del proyecto
 
+Cada capa muestra sus clases en `src/main/java/com/petsalud/backendpetsalud/` y lo que hace cada una. Una petición recorre las capas de arriba hacia abajo.
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 560, "nodeSpacing": 30, "rankSpacing": 36}}}%%
+flowchart TB
+    cliente(["<b>Cliente</b> · Postman / Frontend"])
+
+    mon["<b>monitoreo</b> — detecta ataques<br/><b>SuspiciousActivityFilter</b> · revisa la URL (SQLi, XSS, traversal)<br/><b>SuspiciousActivityService</b> · registra eventos y fuerza bruta"]
+
+    sec["<b>security</b> — quién eres<br/><b>JwtFilter</b> · lee el token Bearer de cada petición<br/><b>JwtService</b> · firma y valida el token<br/><b>UsuarioDetailsService</b> · carga el usuario y su rol<br/><b>SecurityConfig</b> · rutas públicas, stateless, BCrypt"]
+
+    ctrl["<b>controller</b> — qué puedes hacer<br/><b>CitaController, MascotaController, …</b> · endpoints con @PreAuthorize<br/><b>AccesoRecursos</b> · ¿el recurso es del cliente? (anti-IDOR)<br/><b>dto</b> · entrada validada, salida sin password<br/><b>GlobalExceptionHandler</b> · errores en JSON: 400, 401, 403, 404, 409"]
+
+    srv["<b>service</b> — reglas de negocio<br/><b>CitaServiceImpl, VentaServiceImpl, …</b> · horarios, stock, estados<br/><b>ValidadorMascota, ValidadorExpediente, …</b> · datos obligatorios"]
+
+    repo["<b>repository + entity</b> — los datos<br/><b>CitaRepository, VentaRepository, …</b> · Spring Data JPA<br/><b>Cita, Mascota, Venta, Rol, …</b> · entidades JPA y enums<br/><b>DataInitializer</b> (config) · usuarios de prueba al iniciar"]
+
+    db[("<b>MySQL</b>")]
+
+    cliente -->|"Bearer JWT"| mon
+    mon --> sec
+    sec --> ctrl
+    ctrl --> srv
+    srv --> repo
+    repo --> db
+
+    classDef capa fill:#eef4fb,stroke:#4a78b0,stroke-width:1.5px,color:#1c2b3a
+    classDef extremo fill:#ffffff,stroke:#4a78b0,stroke-width:1.5px,color:#1c2b3a
+    class mon,sec,ctrl,srv,repo capa
+    class cliente,db extremo
 ```
-src/main/java/com/petsalud/backendpetsalud/
-├── security/      Autenticación y autorización
-│   ├── SecurityConfig         Reglas de la API: rutas públicas, sesión stateless, 401/403, BCrypt
-│   ├── JwtService             Genera y valida los tokens (firma, emisor y expiración)
-│   ├── JwtFilter              Lee el token "Bearer" de cada petición y autentica al usuario
-│   ├── UsuarioDetailsService  Carga el usuario y su rol desde la base de datos
-│   ├── UsuarioDetails         Adapta Usuario a Spring Security (rol con prefijo ROLE_)
-│   └── AccesoRecursos         Verifica que el recurso pertenezca al cliente (evita IDOR)
-├── monitoreo/     Detección de actividad sospechosa
-│   ├── SuspiciousActivityFilter   Detecta patrones de SQLi, XSS y path traversal en la URL
-│   └── SuspiciousActivityService  Registra los eventos [SEGURIDAD] y alerta fuerza bruta
-├── exception/     GlobalExceptionHandler: convierte errores en respuestas JSON limpias (sin trazas)
-├── controller/    Endpoints REST; cada uno declara sus permisos con @PreAuthorize
-├── dto/           Datos de entrada validados y de salida sin campos sensibles (sin password)
-├── service/       Lógica de negocio; ValidadorUsuario exige datos completos antes de vender
-├── repository/    Acceso a datos con Spring Data JPA (consultas parametrizadas)
-├── entity/        Entidades JPA
-└── config/        DataInitializer: crea los usuarios de prueba al iniciar
 
-src/test/java/     Pruebas unitarias (JUnit 5 + Mockito) y de la capa web (MockMvc)
-src/test/resources/application.properties   Configuración de pruebas con H2 en memoria
-pruebas/           Script de pruebas de la API con curl
-docker-compose.yml MySQL para ejecutar la aplicación
-```
+Otros archivos:
 
-## Flujo de una petición
+| Ruta | Para qué sirve |
+|---|---|
+| `src/test/java/` | Pruebas, en los mismos paquetes que `src/main` |
+| `src/test/resources/application.properties` | Configuración de pruebas con H2 en memoria |
+| `pruebas/pruebas-api.sh` | Pruebas de la API con curl |
+| `docker-compose.yml` | MySQL para ejecutar la aplicación |
+| `.env.example` | Plantilla de las variables de entorno |
 
-1. `POST /api/auth/login` valida email y contraseña (BCrypt) y devuelve un JWT firmado (HS256, 30 min).
-2. El cliente envía el token en cada petición: `Authorization: Bearer <token>`.
-3. `SuspiciousActivityFilter` revisa la URL en busca de patrones de ataque.
-4. `JwtFilter` valida firma, emisor y expiración, y carga el rol **actual** desde la base de datos.
-5. `@PreAuthorize` decide según el rol y, para clientes, según la propiedad del recurso.
-6. Si algo falla, `GlobalExceptionHandler` responde 400/401/403 en JSON y el monitoreo lo registra.
+## Reglas de negocio
+
+| Entidad | Reglas |
+|---|---|
+|  **Cita** |  Estados: AGENDADA → COMPLETADA (al terminar la consulta) o CANCELADA<br> Fecha futura, con hasta 30 días de plazo<br> El veterinario debe tener rol VETERINARIO<br> Dura 30 min: no puede cruzarse con otra del mismo veterinario (409)<br> Máximo 8 citas por veterinario al día (409)<br> Cancelar no la borra: queda en el historial |
+|  **Expediente médico** | Datos obligatorios `ValidadorExpediente`: descripción, diagnóstico y tratamiento obligatorios<br> Lo firma el veterinario que inició sesión (su id sale del token)<br> Mascota o veterinario inexistente → 404 |
+|  **Mascota** | Datos obligatorios `ValidadorMascota`: nombre, especie, raza, fecha de nacimiento y sexo obligatorios<br> La fecha de nacimiento no puede ser futura<br> La edad se calcula sola desde la fecha de nacimiento<br> El dueño sale del token o de la URL, nunca del JSON |
+|  **Venta** | Datos obligatorios`ValidadorUsuario`: el comprador debe ser CLIENTE con datos completos<br> Revisa el stock de todos los productos antes de descontar<br> Un producto repetido se cobra y descuenta por unidad |
 
 ## Ejecución
 
-**Requisitos:** Java 17+ y Docker.
+Requisitos: Java 17+ y Docker.
 
 ```bash
-cp .env.example .env     # completa los valores (el .env no se sube al repositorio)
-docker compose up -d     # levanta MySQL en localhost:3306 (la base pedsaluds_db se crea sola)
+cp .env.example .env     # completa los valores (el .env no se sube)
+docker compose up -d     # levanta MySQL
 ./mvnw spring-boot:run
 ```
 
 | Variable | Uso |
 |---|---|
-| `MYSQL_USERNAME` / `MYSQL_PASSWORD` | Credenciales de MySQL (Docker Compose usa `MYSQL_PASSWORD` como clave de root) |
-| `JWT_SECRET_BASE64` | Clave de firma JWT, mínimo 32 bytes: `openssl rand -base64 32` |
+| `MYSQL_USERNAME` / `MYSQL_PASSWORD` | Credenciales de MySQL |
+| `JWT_SECRET_BASE64` | Clave de firma JWT (`openssl rand -base64 32`) |
 | `SEED_PASSWORD` | Contraseña de los usuarios de prueba |
 
-**Usuarios de prueba** (creados por `DataInitializer`, contraseña = `SEED_PASSWORD`):
-`cliente@petsalud.test` · `empleado@petsalud.test` · `gerente@petsalud.test`
+Usuarios de prueba: `cliente@petsalud.test` (CLIENTE) · `empleado@petsalud.test` (VETERINARIO) · `gerente@petsalud.test` (ADMIN)
 
 ## Roles y permisos
 
-| Recurso | Cliente | Empleado | Gerente |
+| Recurso | Cliente | Veterinario | Admin |
 |---|---|---|---|
-| Productos | Ver | Ver, crear, editar, stock bajo | Todo + eliminar |
-| Mascotas | Solo las suyas (crear, ver, editar) | Todas | Todas + eliminar |
-| Citas | Agendar, ver y cancelar las de sus mascotas | Todas + cambiar estado | Todas |
-| Expedientes médicos | Ver los de sus mascotas | Crear y ver todos | Todo + eliminar |
-| Ventas | Ver las suyas | Registrar y ver por cliente | Todo + listar todas |
-| Recompensas / Notificaciones | Ver las suyas | Crear y ver | Todo + eliminar |
-| Usuarios | Ver y editar su perfil | Ver perfiles | Listar, editar y eliminar |
+| Citas | Las de sus mascotas | Todas + cambiar estado | Todas + cambiar estado |
+| Expedientes | Los de sus mascotas | Crear y ver todos | Ver todos + eliminar |
+| Mascotas | Las suyas | Todas | Todas + eliminar |
+| Ventas | Las suyas | Registrar y ver | Todo |
+| Productos | Ver | Ver, crear, editar | Todo + eliminar |
+| Usuarios | Su perfil | Ver perfiles | Todo |
 
-Públicos: `POST /api/auth/login` y `POST /api/usuarios/registro`. El resto exige token (sin token → **401**, sin permiso → **403**).
+Públicos: `POST /api/auth/login` y `POST /api/usuarios/registro`. Sin token → **401**; sin permiso → **403**.
 
 ## Pruebas
 
-El proyecto tiene **87 pruebas automatizadas** con JUnit 5. Las dependencias (repositorios y servicios) se simulan con Mockito, así que ninguna prueba necesita MySQL ni Docker. La prueba que levanta la aplicación completa usa H2 en memoria. JaCoCo mide la cobertura y **hace fallar el build si alguna clase de usuarios o ventas baja del 80 % de líneas cubiertas**.
-
-| Clase de prueba | Tipo | Pruebas | Qué valida |
-|---|---|---|---|
-| `ValidadorUsuarioTest` | Unitaria pura | 8 | Nombre, apellido, email y dirección obligatorios |
-| `IdentidadUsuarioTest` | Mockito | 5 | Carga del usuario por email y su rol (`ROLE_*`) |
-| `JwtFilterTest` | Mockito | 7 | Token válido autentica con su rol; token inválido o de usuario eliminado no |
-| `UsuarioServiceImplGestionTest` | Mockito | 3 | Editar el perfil no cambia email, contraseña ni rol |
-| `VentaServiceImplTest` | Mockito | 12 | Usuario completo, stock, total de la venta y productos vinculados |
-| `VentaAutorizacionTest` | `@WebMvcTest` | 11 | Capa 1 (rol) y capa 2 (propiedad) en los endpoints de ventas |
-| `ProductoControllerTest` | MockMvc standalone | 11 | Rutas, códigos HTTP y JSON de `ProductoController` |
-| `JwtServiceTest` | Unitaria pura | 7 | Firma, emisor y expiración del JWT |
-| `AccesoRecursosTest` | Mockito | 5 | Un cliente solo accede a sus recursos (evita IDOR) |
-| `UsuarioServiceImplTest` | Mockito | 2 | Registro con BCrypt y rol CLIENTE; email duplicado |
-| `AutorizacionEndpointsTest` | `@WebMvcTest` | 15 | Permisos en productos, usuarios y mascotas; validación del registro |
-| `BackendpetsaludApplicationTests` | Contexto completo (H2) | 1 | La aplicación arranca |
+**177 pruebas** en 20 clases, con JUnit 5 y Mockito (`@Mock` / `@InjectMocks`). No necesitan MySQL ni Docker.
 
 ```bash
-./mvnw clean verify                      # ejecuta las pruebas y verifica el 80 % de cobertura
-open target/site/jacoco/index.html       # reporte de cobertura (en Windows: start ...)
+./mvnw clean verify                       # corre todas las pruebas y genera los reportes
+./mvnw test -Dtest=CitaServiceImplTest    # una sola clase
 ```
 
-**Pruebas de la API con curl** (con la aplicación corriendo):
+| Reporte | Dónde queda |
+|---|---|
+| Resultado XML por clase | `target/surefire-reports/` |
+| Cobertura HTML | `target/site/jacoco/index.html` (el build falla si una clase crítica baja del 80 %) |
 
-```bash
-./pruebas/pruebas-api.sh
-```
+### Entidades clave · semana 6
 
-Recorre autenticación, roles, propiedad de recursos, inyección SQL, XSS, CSRF y fuerza bruta, y muestra `✔ PASA` o `✘ FALLA` por cada caso. Funciona en la terminal de macOS/Linux y en Git Bash (Windows).
+| Clase | Pruebas | Qué valida |
+|---|---|---|
+| `CitaServiceImplTest` | 18 | Fechas, cruces, sobrecarga, estados |
+| `EstadoCitaTest` | 10 | Las 9 combinaciones de estado |
+| `CitaAutorizacionTest` | 11 | Quién agenda, cancela y cambia estados |
+| `ExpedienteMedicoServiceImplTest` | 11 | Registro completo, firmante VETERINARIO |
+| `ExpedienteAutorizacionTest` | 11 | Solo VETERINARIO crea; cliente ve solo lo suyo |
+| `MascotaTest` | 3 | Cálculo de la edad |
+| `ValidadorMascotaTest` | 11 | Datos obligatorios y fecha futura |
+| `MascotaServiceImplTest` | 10 | Asignación al dueño, citas y expedientes |
+| `VentaServiceImplTest` | 17 | Cliente, stock, total, productos repetidos |
+| `VentaAutorizacionTest` | 11 | Permisos por rol y por dueño |
+
+### Seguridad y usuarios · semanas 4 y 5
+
+| Clase | Pruebas | Qué valida |
+|---|---|---|
+| `AutorizacionEndpointsTest` | 15 | Permisos en productos, usuarios y mascotas |
+| `ProductoControllerTest` | 11 | Rutas y respuestas de productos |
+| `ValidadorUsuarioTest` | 8 | Datos obligatorios del usuario |
+| `JwtServiceTest` | 7 | Firma, emisor y expiración del token |
+| `JwtFilterTest` | 7 | Token válido, inválido o de usuario eliminado |
+| `IdentidadUsuarioTest` | 5 | Carga del usuario y su rol |
+| `AccesoRecursosTest` | 5 | Cada cliente accede solo a lo suyo |
+| `UsuarioServiceImplGestionTest` | 3 | Editar el perfil no cambia el rol |
+| `UsuarioServiceImplTest` | 2 | Contraseña con BCrypt; email duplicado |
+| `BackendpetsaludApplicationTests` | 1 | La aplicación arranca |
+
+**Pruebas de la API con curl** (con la aplicación corriendo): `./pruebas/pruebas-api.sh` muestra `✔ PASA` o `✘ FALLA` en cada caso de autenticación, roles y ataques.
 
 ## Medidas de seguridad
 
 | Amenaza | Medida |
 |---|---|
-| Acceso no autorizado | JWT firmado con expiración, roles con `@PreAuthorize`, control de propiedad (`AccesoRecursos`) |
-| Robo de contraseñas | BCrypt, `@JsonIgnore` en `password`, DTOs de respuesta sin datos sensibles |
-| Escalamiento de privilegios | El registro no acepta rol: siempre crea `CLIENTE` |
-| Inyección SQL | Consultas parametrizadas de Spring Data JPA y validación de entrada |
-| XSS | Validación con `@Pattern` (sin `<` `>`), respuestas JSON y cabecera `nosniff` |
-| CSRF | API stateless sin cookies: el token viaja en la cabecera `Authorization` |
-| Fuerza bruta y ataques | `SuspiciousActivityService` registra intentos y alerta desde 5 fallos por IP |
-| Exposición de secretos | Claves en `.env` (excluido de Git); la app no arranca con claves débiles |
+| Acceso no autorizado | JWT con expiración, `@PreAuthorize` y `AccesoRecursos` |
+| Suplantación | El dueño y el veterinario se toman del token |
+| Robo de contraseñas | BCrypt; la contraseña nunca sale en el JSON |
+| Escalar privilegios | El registro siempre crea CLIENTE; el rol se lee de la BD |
+| Inyección SQL y XSS | Consultas parametrizadas y validación de entrada |
+| CSRF | API sin cookies (stateless) |
+| Fuerza bruta | Alerta desde 5 intentos fallidos por IP |
