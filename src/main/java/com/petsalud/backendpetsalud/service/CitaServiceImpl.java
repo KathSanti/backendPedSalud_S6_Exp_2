@@ -48,13 +48,13 @@ public class CitaServiceImpl implements CitaService {
         }
         ValidadorUsuario.validarDatosBasicos(mascota.getPropietario(), "propietario");
 
-        // 3. El veterinario existe, tiene el rol EMPLEADO y sus datos básicos
+        // El veterinario existe, tiene el rol EMPLEADO y sus datos básicos
         Usuario veterinario = usuarioRepository.findById(veterinarioId)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Veterinario no encontrado"));
-        ValidadorUsuario.validarRol(veterinario, Rol.ADMIN, "veterinario");
+        ValidadorUsuario.validarRol(veterinario, Rol.VETERINARIO,"veterinario");
         ValidadorUsuario.validarDatosBasicos(veterinario, "veterinario");
 
-        // 4. El veterinario no tiene otra cita a esa hora (las canceladas no cuentan)
+        // El veterinario no tiene otra cita a esa hora (las canceladas no cuentan)
         validarHorarioDisponible(veterinarioId, fechaHora);
 
         // la cita nace en estado AGENDADA
@@ -141,5 +141,4 @@ public class CitaServiceImpl implements CitaService {
                     + MAX_CITAS_POR_DIA + " citas)");
         }
 }
-
 }

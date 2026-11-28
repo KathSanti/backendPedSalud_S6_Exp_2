@@ -187,7 +187,7 @@ class CitaServiceImplTest {
 
     @Test
     @DisplayName("Un CLIENTE no puede ser asignado como veterinario de una cita")
-    void agendarCita_veterinarioSinRolEmpleado_seRechaza() {
+    void agendarCita_veterinarioSinRolVeterinario_seRechaza() {
         // Arrange
         when(mascotaRepository.findById(10L)).thenReturn(Optional.of(bambina));
         when(usuarioRepository.findById(1L)).thenReturn(Optional.of(duena));
@@ -376,7 +376,7 @@ class CitaServiceImplTest {
         when(usuarioRepository.findById(20L)).thenReturn(Optional.of(veterinario));
     }
 
-    // Si no hay cruces de horario, save() devuelve la cita que recibe.
+    // Si no hay cruces de horario save() devuelve la cita que recibe.
     private void prepararAgendaLibre() {
         prepararMascotaYVeterinario();
         when(citaRepository.existsByVeterinarioIdAndEstadoNotAndFechaHoraAfterAndFechaHoraBefore(

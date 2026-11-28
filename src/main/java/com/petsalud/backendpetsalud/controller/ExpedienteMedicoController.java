@@ -1,14 +1,12 @@
 package com.petsalud.backendpetsalud.controller;
 
 import com.petsalud.backendpetsalud.entity.ExpedienteMedico;
-import com.petsalud.backendpetsalud.security.UsuarioDetails;
 import com.petsalud.backendpetsalud.service.ExpedienteMedicoService;
 
 import lombok.AllArgsConstructor;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -19,15 +17,6 @@ public class ExpedienteMedicoController {
 
     private final ExpedienteMedicoService expedienteMedicoService;
 
-    @PreAuthorize("hasAnyRole('VETERINARIO','ADMIN')")
-    @PostMapping
-    public ResponseEntity<ExpedienteMedico> agregarRegistro(
-            @RequestParam Long mascotaId,
-            @RequestParam Long veterinarioId,
-            @RequestBody ExpedienteMedico registro) {
-        ExpedienteMedico nuevoRegistro = expedienteMedicoService.agregarRegistro(mascotaId, veterinarioId, registro);
-        return ResponseEntity.ok(nuevoRegistro);
-    }
 
     // Datos clínicos: el cliente solo ve los expedientes de sus mascotas.
     @PreAuthorize("hasAnyRole('VETERINARIO','ADMIN') or @accesoRecursos.expediente(authentication, #id)")
@@ -52,13 +41,14 @@ public class ExpedienteMedicoController {
         return ResponseEntity.noContent().build();
     }
 
-    @PreAuthorize("hasRole('VETERINARIO')")
+    @PreAuthorize("hasAnyRole('VETERINARIO','ADMIN')")
     @PostMapping
     public ResponseEntity<ExpedienteMedico> agregarRegistro(
-            @AuthenticationPrincipal UsuarioDetails veterinario,
             @RequestParam Long mascotaId,
+            @RequestParam Long veterinarioId,
             @RequestBody ExpedienteMedico registro) {
-        ExpedienteMedico nuevoRegistro = expedienteMedicoService.agregarRegistro(mascotaId, veterinario.getId(), registro);
-        return ResponseEntity.ok(nuevoRegistro); 
+        ExpedienteMedico nuevoRegistro = expedienteMedicoService.agregarRegistro(mascotaId, veterinarioId, registro);
+        return ResponseEntity.ok(nuevoRegistro);
     }
+
 }
